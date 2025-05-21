@@ -3,6 +3,9 @@
 <JUCERPROJECT id="Nv2Tcf" name="GainController" projectType="audioplug" useAppConfig="0"
               addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1">
   <MAINGROUP id="v9nCCM" name="GainController">
+    <GROUP id="{F26E3244-D3E9-0CF4-5302-DE183A23ACFC}" name="Resources">
+      <FILE id="e2E5AN" name="ARLogo.svg" compile="0" resource="1" file="Resources/SVG/ARLogo.svg"/>
+    </GROUP>
     <GROUP id="{B55F7BA9-E177-0A4A-81FD-2F32EC45A432}" name="Source">
       <FILE id="yBrwR0" name="PluginProcessor.cpp" compile="1" resource="0"
             file="Source/PluginProcessor.cpp"/>

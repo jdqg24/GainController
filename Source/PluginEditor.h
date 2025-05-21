@@ -3,6 +3,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "BinaryData.h"
 
 class SwitchLookAndFeel : public juce::LookAndFeel_V4
 {
@@ -12,7 +13,7 @@ public:
     {
         auto bounds = tb.getLocalBounds().toFloat().reduced(2.0f);
         // draw track
-        g.setColour(juce::Colours::darkgrey);
+        g.setColour(juce::Colour(0xFF884FFC));
         g.fillRoundedRectangle(bounds, bounds.getHeight() * 0.5f);
         // draw knob
         g.setColour(juce::Colours::lightgrey);

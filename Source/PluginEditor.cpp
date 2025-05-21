@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "BinaryData.h"
 
 GainControllerAudioProcessorEditor::GainControllerAudioProcessorEditor(GainControllerAudioProcessor& p)
     : AudioProcessorEditor(&p), processorRef(p)
@@ -8,6 +9,7 @@ GainControllerAudioProcessorEditor::GainControllerAudioProcessorEditor(GainContr
     // gain control
     gainSlider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     gainSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    gainSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xFF884FFC));
     addAndMakeVisible(gainSlider);
     gainAttachment.reset(new SliderAttachment(processorRef.parameters, "gain", gainSlider));
     gainSlider.onValueChange = [this] { updateDisplay(); };
@@ -17,6 +19,7 @@ GainControllerAudioProcessorEditor::GainControllerAudioProcessorEditor(GainContr
     // pan control
     panSlider.setSliderStyle(juce::Slider::RotaryVerticalDrag);
     panSlider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    panSlider.setColour(juce::Slider::thumbColourId, juce::Colour(0xFF884FFC));
     addAndMakeVisible(panSlider);
     panAttachment.reset(new SliderAttachment(processorRef.parameters, "pan", panSlider));
     panSlider.onValueChange = [this] { updateDisplay(); };
@@ -96,7 +99,7 @@ void GainControllerAudioProcessorEditor::timerCallback()
             // multi-stage gradient: darkgreen -> lightgreen -> yellow, red on clip
             if (db < -24.0f)
                 return juce::Colours::darkgrey;
-            if (db >= 0.0f)
+            if (db > 0.0f)
                 return juce::Colours::red;
 
             auto blend = [](juce::Colour a, juce::Colour b, float t)
