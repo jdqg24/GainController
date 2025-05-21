@@ -69,7 +69,7 @@ A lightweight VST plugin built with the JUCE framework for precise gain staging 
 
 ---
 
-##🎚️ Usage
+## 🎚️ Usage
 
 1. Insert GainController on your audio track.
 
