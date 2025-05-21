@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 
 GainControllerAudioProcessor::GainControllerAudioProcessor()
     : AudioProcessor(BusesProperties()
@@ -10,16 +11,18 @@ GainControllerAudioProcessor::GainControllerAudioProcessor()
             std::make_unique<juce::AudioParameterFloat>("gain", "Gain",
                 juce::NormalisableRange<float>(0.0f, 2.0f, 0.01f), 1.0f),
             std::make_unique<juce::AudioParameterFloat>("pan",  "Pan",
-                juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f)
+                juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f),
+            std::make_unique<juce::AudioParameterBool>("mode","Mono Mode", false)
         })
 {
     gainParam = parameters.getRawParameterValue("gain");
     panParam = parameters.getRawParameterValue("pan");
+    modeParam = parameters.getRawParameterValue("mode");
 }
 
 GainControllerAudioProcessor::~GainControllerAudioProcessor() {}
 
-void GainControllerAudioProcessor::prepareToPlay(double /*sr*/, int /*spb*/)
+void GainControllerAudioProcessor::prepareToPlay(double, int)
 {
     lastGain = gainParam->load();
     lastPan = panParam->load();
@@ -32,38 +35,65 @@ void GainControllerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     const int channels = buffer.getNumChannels();
     const int samples = buffer.getNumSamples();
 
-    // Measure input peak
+    // Measure input level
     float peakIn = 0.0f;
     for (int ch = 0; ch < channels; ++ch)
         for (int i = 0; i < samples; ++i)
             peakIn = std::max(peakIn, std::abs(buffer.getReadPointer(ch)[i]));
     inputLevelDb.store(juce::Decibels::gainToDecibels(peakIn, -100.0f));
 
-    // Get targets
     float tgtGain = gainParam->load();
     float tgtPan = panParam->load();
+    bool  monoMode = (modeParam->load() > 0.5f);
 
-    // Linear pan: center = unity
-    auto computePan = [](float pan) {
-        float left = pan <= 0.0f ? 1.0f : 1.0f - pan;
-        float right = pan >= 0.0f ? 1.0f : 1.0f + pan;
-        return std::make_pair(left, right);
-        };
-    auto [startL, startR] = computePan(lastPan);
-    auto [endL, endR] = computePan(tgtPan);
-
-    // Ramp gain & pan
-    for (int ch = 0; ch < getTotalNumOutputChannels(); ++ch)
+    if (monoMode)
     {
-        bool isLeft = (ch == 0);
-        float g0 = lastGain * (isLeft ? startL : startR);
-        float g1 = tgtGain * (isLeft ? endL : endR);
-        buffer.applyGainRamp(ch, 0, samples, g0, g1);
-    }
-    lastGain = tgtGain;
-    lastPan = tgtPan;
+        // Mono panning: sum to mono then crossfade preserving volume
+        juce::AudioBuffer<float> monoBuf(1, samples);
+        monoBuf.clear();
+        for (int ch = 0; ch < channels; ++ch)
+            monoBuf.addFrom(0, 0, buffer, ch, 0, samples, 0.5f);
 
-    // Measure output peak
+        float gainStart = lastGain;
+        float gainEnd = tgtGain;
+        float panStart = lastPan;
+        float panEnd = tgtPan;
+
+        for (int i = 0; i < samples; ++i)
+        {
+            float t = float(i) / float(samples);
+            float gCur = gainStart + (gainEnd - gainStart) * t;
+            float p = panStart + (panEnd - panStart) * t;
+            float lG = (p <= 0.0f) ? gCur : gCur * (1.0f - p);
+            float rG = (p >= 0.0f) ? gCur : gCur * (p + 1.0f);
+            float s = monoBuf.getSample(0, i);
+            buffer.setSample(0, i, s * lG);
+            buffer.setSample(1, i, s * rG);
+        }
+
+        lastGain = tgtGain;
+        lastPan = tgtPan;
+    }
+    else
+    {
+        // Stereo panning: scale channels individually
+        float leftStart = (lastPan <= 0.0f) ? 1.0f : 1.0f - lastPan;
+        float rightStart = (lastPan >= 0.0f) ? 1.0f : 1.0f + lastPan;
+        float leftEnd = (tgtPan <= 0.0f) ? 1.0f : 1.0f - tgtPan;
+        float rightEnd = (tgtPan >= 0.0f) ? 1.0f : 1.0f + tgtPan;
+
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            float sG = lastGain * (ch == 0 ? leftStart : rightStart);
+            float eG = tgtGain * (ch == 0 ? leftEnd : rightEnd);
+            buffer.applyGainRamp(ch, 0, samples, sG, eG);
+        }
+
+        lastGain = tgtGain;
+        lastPan = tgtPan;
+    }
+
+    // Measure output level
     float peakOut = 0.0f;
     for (int ch = 0; ch < channels; ++ch)
         for (int i = 0; i < samples; ++i)
@@ -71,7 +101,18 @@ void GainControllerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer
     outputLevelDb.store(juce::Decibels::gainToDecibels(peakOut, -100.0f));
 }
 
-juce::AudioProcessorEditor* GainControllerAudioProcessor::createEditor() { return new GainControllerAudioProcessorEditor(*this); }
+// Create the editor
+juce::AudioProcessorEditor* GainControllerAudioProcessor::createEditor()
+{
+    return new GainControllerAudioProcessorEditor(*this);
+}
+
+// Needed for standalone and hosts
+juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
+{
+    return new GainControllerAudioProcessor();
+}
+
 bool GainControllerAudioProcessor::hasEditor() const { return true; }
 
 void GainControllerAudioProcessor::getStateInformation(juce::MemoryBlock& mb)
@@ -83,6 +124,3 @@ void GainControllerAudioProcessor::setStateInformation(const void* data, int siz
 {
     parameters.replaceState(juce::ValueTree::fromXml(*getXmlFromBinary(data, sizeInBytes)));
 }
-
-juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new GainControllerAudioProcessor(); }
-

@@ -36,8 +36,11 @@ public:
 private:
     std::atomic<float>* gainParam = nullptr;
     std::atomic<float>* panParam = nullptr;
+    std::atomic<float>* modeParam = nullptr;  // false = Stereo, true = Mono
+
     float lastGain = 1.0f;
     float lastPan = 0.0f;
+
     std::atomic<float> inputLevelDb{ -100.0f };
     std::atomic<float> outputLevelDb{ -100.0f };
 
